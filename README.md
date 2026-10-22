@@ -1,154 +1,247 @@
-# codeAtlas: Agentic Explainable Semantic Code Search Engine
+# codeAtlas: Agentic Semantic Code Search & Codebase Intelligence
 
-**codeAtlas** is a cross-platform, local, private, and explainable AI system for semantic code search, multi-language repository understanding, token-level attribution (SHAP style), bug detection, and agentic orchestration using LangGraph and MCP.
+**codeAtlas** is a cross-platform, private, and explainable AI engine for semantic code retrieval, multi-language repository understanding, token-level attribution, automated bug inspection, and agentic orchestration. 
 
-Designed to run 100% offline without external APIs or cloud dependencies across **Windows, macOS, and Linux**.
-
----
-
-## Compliance with Project Specification (`Agentic_Explainable_Semantic_Code_Search_Updated.docx`)
-
-This project implements all requirements, syllabus topics, and weekly deliverables outlined in `Agentic_Explainable_Semantic_Code_Search_Updated.docx`:
-
-| Phase / Requirement | Specified Deliverable in Document | Status | Implementation in codeAtlas |
-| :--- | :--- | :--- | :--- |
-| **Week 1: Parsing & Chunking** | Clean function/class-level chunks with file path and line numbers | Completed | `agent/tools/parser_tool.py`: Universal Tree-sitter AST parser supporting 9 languages (Python, JS, TS, Java, Go, Rust, C, C++) plus line-window fallback. Saved to `data/chunks.json`. |
-| **Week 2: Embeddings & Search** | Working CLI/engine: query code via vector search | Completed | `agent/tools/indexer_tool.py` and `agent/tools/search_tool.py`: Pretrained `all-MiniLM-L6-v2` (384-d) transformer embeddings with FAISS `IndexFlatIP` inner-product vector index. |
-| **Week 3: Explainability** | Token attribution / similarity contribution highlight | Completed | `agent/tools/search_tool.py:get_token_contributions`: Vectorized batch token contribution attribution (SHAP/Grad-CAM style thinking) + `agent/tools/explain_tool.py` local SLM reasoning. |
-| **Week 4: Interface & Evaluation** | Streamlit UI + 10-query benchmark vs keyword search | Completed | `ui/app.py`: Tokyo Night Streamlit UI.<br>`evaluation/run_eval.py`: 10-query benchmark achieving 100% Top-1 accuracy over grep baseline. |
-| **Section 11: Agentic AI Upgrade** | LangGraph orchestrator + MCP repository access layer | Completed | `agent/graph.py`: LangGraph StateGraph with intent routing and `MemorySaver`.<br>`mcp_server.py`: Model Context Protocol server exposing tool endpoints over JSON-RPC 2.0 stdio. |
-| **Any Repository Requirement** | Works for any GitHub repo or local path | Completed | `agent/tools/repo_loader.py`: Shallow clones any GitHub URL on demand or indexes any local project folder. |
+Built to execute 100% locally and offline without external API keys or cloud dependencies across macOS, Linux, and Windows.
 
 ---
 
-## Syllabus Topic Alignment
+## Architecture Overview
 
-| Syllabus Branch | Specification Requirement | Project Implementation |
-| :--- | :--- | :--- |
-| **AI (Superset)** | Applied reasoning system that makes decisions | LangGraph orchestrator routes intent across parser, search, explain, overview, and runner nodes. |
-| **Machine Learning** | Pretrained embedding space without training from scratch | 384-dimensional dense semantic vector space via `all-MiniLM-L6-v2`. |
-| **Deep Learning** | Transformer neural network forward passes and vector representations | Sentence-transformer forward passes + local causal language model running in bfloat16. |
-| **Deep Learning -> LLM -> SLM -> Transformer** | Small pretrained transformer for code and query embeddings + local reasoning | `all-MiniLM-L6-v2` for embeddings and `Qwen2.5-1.5B-Instruct` for local offline reasoning. |
-| **Deep Learning -> Explainable AI (XAI)** | Token-level output attribution (SHAP / Grad-CAM style) | Dot-product contribution matrix calculating token-level impact on query-code similarity. |
-| **Agentic AI & MCP** | Multi-agent coordination and standardized repository tool access | LangGraph state graph + JSON-RPC Model Context Protocol server (`mcp_server.py`). |
+```mermaid
+flowchart TD
+    subgraph Ingestion ["1. Ingestion & AST Analysis"]
+        Repo[Source Code / Git Repository] --> Loader[Dynamic Repo Loader]
+        Loader --> TS[Tree-sitter AST Parser]
+        TS --> Chunks[Syntax-Aware Code Chunks]
+    end
+
+    subgraph Indexing ["2. Vector Representation & Indexing"]
+        Chunks --> Embedder[all-MiniLM-L6-v2 Embedder]
+        Embedder --> Vectors[384-d Dense Vectors]
+        Vectors --> FAISS[FAISS IndexFlatIP Vector Store]
+    end
+
+    subgraph AgenticCore ["3. LangGraph Orchestrator & Reasoning"]
+        Query[User Natural Language Query] --> Router[Intent Router]
+        Router --> SearchNode[Vector Search Node]
+        Router --> OverviewNode[Repository Overview Node]
+        Router --> BugNode[Bug Analysis Node]
+        Router --> RunNode[Subprocess Runner Node]
+        
+        SearchNode --> XAI[SHAP-Style Token Attribution]
+        XAI --> ContextBuilder[Context Synthesizer]
+        OverviewNode --> ContextBuilder
+        BugNode --> ContextBuilder
+
+        ContextBuilder --> SLM[Local Qwen2.5-1.5B Reasoning]
+    end
+
+    subgraph Interfaces ["4. Presentation & Integration"]
+        SLM --> UI[Streamlit Tokyo Night UI]
+        SLM --> MCP[Model Context Protocol JSON-RPC Server]
+    end
+```
 
 ---
 
-## Cross-Platform Quickstart (Windows, macOS, Linux)
+## Key Features
 
-codeAtlas is built to run on any operating system without configuration friction.
+- **Universal Multi-Language AST Parsing**:
+  Extracts function- and class-level semantic blocks using Tree-sitter across 9 primary languages (Java, Python, JavaScript, TypeScript, Go, Rust, C, C++, and SQL), with robust line-window fallback for other file formats.
+- **Dense Vector Search**:
+  Embeds syntax-aware code blocks into a 384-dimensional dense semantic space via `all-MiniLM-L6-v2` and indexes them in an inner-product normalized FAISS vector database.
+- **Explainable AI (Token-Level Attribution)**:
+  Applies vectorized token similarity scoring to calculate individual token contributions (SHAP-style explainability), illustrating why specific code snippets matched a query.
+- **Agentic Orchestration (LangGraph)**:
+  Coordinates parsing, semantic retrieval, repository overview generation, bug analysis, and sandboxed test execution through a stateful `StateGraph` with conversation memory.
+- **Offline Codebase Reasoning**:
+  Leverages a local, quantized `Qwen2.5-1.5B-Instruct` causal language model running in bfloat16 on CPU for natural language synthesis without external network requests.
+- **Model Context Protocol (MCP) Compliance**:
+  Provides a standard JSON-RPC 2.0 stdio server enabling IDEs and external agents (Claude Desktop, Antigravity, Cursor) to search and analyze repositories directly.
 
-### 1. Prerequisites
+---
+
+## Quickstart
+
+### Prerequisites
 - Python 3.10, 3.11, 3.12, or 3.13
-- Git (optional, for remote GitHub repository cloning)
+- Git (optional, for remote repository cloning)
 
-### 2. Setup Virtual Environment
+### 1. Installation
 
-On macOS / Linux:
+Clone the repository and install dependencies in a virtual environment:
+
+#### macOS / Linux
 ```bash
+git clone https://github.com/nandinisahu2120/codeAtlas.git
+cd codeAtlas/mini
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-On Windows (Command Prompt or PowerShell):
+#### Windows
 ```cmd
+git clone https://github.com/nandinisahu2120/codeAtlas.git
+cd codeAtlas\mini
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Launching codeAtlas
+### 2. Launching the Web Interface
 
-You can use the universal Python launcher on any OS:
+Use the universal cross-platform launcher:
 ```bash
 python run.py
 ```
 
-Or platform-specific launchers:
+Or platform-specific scripts:
 - **macOS / Linux**: `./start.sh`
-- **Windows**: Double-click `start.bat` or run `start.bat` from Command Prompt.
+- **Windows**: `start.bat`
 
-Open your browser to:
+Access the web interface at:
 ```text
 http://localhost:8501
 ```
 
 ---
 
-## Running the Evaluation Benchmark
+## Usage Guide
 
-To run the 10-query benchmark comparing semantic vector search against keyword search:
+### 1. Indexing a Codebase
+In the Streamlit chat input or agent prompt:
+- **Load a remote GitHub repository**:
+  ```text
+  load https://github.com/username/project.git
+  ```
+- **Load a local directory**:
+  ```text
+  load /path/to/local/project
+  ```
+- **Re-index the active repository**:
+  ```text
+  index this repo
+  ```
 
-On macOS / Linux:
-```bash
-./venv/bin/python3 evaluation/run_eval.py
-```
+### 2. Querying & Semantic Search
+Query code by functionality, concept, or technical behavior rather than exact keywords:
+- `"where is user authentication handled?"`
+- `"find thread safe cache operations"`
+- `"language used in this repo?"`
+- `"repo overview"`
 
-On Windows:
-```cmd
-venv\Scripts\python.exe evaluation\run_eval.py
-```
-
-Benchmark output:
-```text
-Summary of Benchmark Results:
-Total Queries:         10
-Semantic Search Top-1: 10/10 (100.0%)
-Semantic Search Top-3: 10/10 (100.0%)
-Grep Baseline Top-1:   10/10 (100.0%)
-Grep Baseline Top-3:   10/10 (100.0%)
-```
+### 3. Bug Analysis & Verification
+- `"check math_utils.py for division by zero errors"`
+- `"find bugs in the caching logic"`
 
 ---
 
 ## Model Context Protocol (MCP) Server
 
-codeAtlas includes a compliant Model Context Protocol (MCP) server that exposes codebase intelligence to any MCP client (such as Claude Desktop, Antigravity, or Cursor).
+codeAtlas exposes its codebase analysis engine as an MCP tool server over standard I/O (stdio).
 
-Run the MCP server over stdio:
+### Running the Server
 ```bash
 python mcp_server.py
 ```
 
-Available MCP tools:
-- `index_repository`: Clone and parse GitHub repos or local folders.
-- `search_code`: Vector similarity search with MiniLM embeddings.
-- `explain_code_match`: Token attribution and natural language rationale.
-- `get_repo_overview`: Manifest of files, line counts, and symbols.
-- `run_python_file`: Sandboxed subprocess runner with timeout guard.
+### Registered Tools
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| `index_repository` | `path_or_url` | Clones/loads and indexes a GitHub URL or local directory |
+| `search_code` | `query`, `top_k` | Runs dense vector search with MiniLM embeddings |
+| `explain_code_match` | `query`, `code` | Computes token-level attribution and natural language explanation |
+| `get_repo_overview` | *none* | Generates a manifest of indexed files, symbols, and language breakdown |
+| `run_python_file` | `file_path`, `timeout` | Executes a Python file in a sandboxed subprocess |
+
+### Claude Desktop Integration Configuration
+Add this entry to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "codeAtlas": {
+      "command": "/absolute/path/to/codeAtlas/mini/venv/bin/python",
+      "args": ["/absolute/path/to/codeAtlas/mini/mcp_server.py"]
+    }
+  }
+}
+```
+
+---
+
+## Evaluation Benchmark
+
+The repository includes a quantitative 10-query benchmark comparing semantic vector search against keyword-based grep search across multi-language codebases.
+
+### Running the Evaluation
+```bash
+python evaluation/run_eval.py
+```
+
+### Benchmark Results
+| Metric | Semantic Search (codeAtlas) | Grep Baseline |
+| :--- | :--- | :--- |
+| **Top-1 Accuracy** | 100.0% (10/10) | 100.0% (10/10) |
+| **Top-3 Accuracy** | 100.0% (10/10) | 100.0% (10/10) |
+| **Search Paradigm** | Dense Vector Similarity (FAISS) | Exact Keyword Substring |
+| **Explainability** | Token Attribution Contribution | None |
 
 ---
 
 ## Project Structure
 
 ```text
-mini/
-├── agent/
-│   ├── graph.py               # LangGraph brain: StateGraph routing & memory
-│   ├── state.py               # AgentState TypedDict
-│   └── tools/
-│       ├── parser_tool.py     # Universal Tree-sitter AST parser (9 languages)
-│       ├── indexer_tool.py    # MiniLM embeddings + FAISS vector index
-│       ├── search_tool.py     # Semantic search + token explainability (SHAP style)
-│       ├── explain_tool.py    # Local Qwen2.5-1.5B inference pipeline
-│       ├── repo_loader.py     # Dynamic GitHub cloner and local directory loader
-│       └── runner_tool.py     # Sandboxed subprocess runner with timeout guard
-├── evaluation/
-│   ├── eval_queries.json      # 10 benchmark queries
-│   └── run_eval.py            # Benchmark script (Semantic vs Grep with Win/Unix fallback)
-├── target_repo/               # Sample multi-language repository
-│   ├── apiClient.js           # JavaScript example
-│   ├── auth_service.py        # Python authentication example
-│   ├── cache.go               # Go concurrency and cache example
-│   ├── math_utils.py          # Math calculations with intentional bug
-│   └── run_tests.py           # Runnable test suite
-├── ui/
-│   └── app.py                 # Streamlit dark Tokyo Night chat UI
-├── mcp_server.py              # Model Context Protocol (MCP) JSON-RPC server
-├── run.py                     # Universal cross-platform launcher (Win/Mac/Linux)
-├── start.sh                   # Unix shell launcher
-├── start.bat                  # Windows batch launcher
-├── config.py                  # Central cross-platform configuration & OpenMP guards
-└── requirements.txt           # Dependencies
+codeAtlas/
+├── .gitignore                                           # Git ignore configuration
+├── README.md                                            # Technical documentation
+└── mini/                                                # Application root
+    ├── run.py                                           # Universal launcher
+    ├── start.sh                                         # macOS/Linux launcher
+    ├── start.bat                                        # Windows launcher
+    ├── config.py                                        # Global paths and configuration
+    ├── mcp_server.py                                    # Model Context Protocol stdio server
+    ├── requirements.txt                                 # Core dependencies
+    │
+    ├── agent/                                           # LangGraph agent engine
+    │   ├── graph.py                                     # StateGraph coordinator & router
+    │   ├── state.py                                     # AgentState TypedDict schema
+    │   └── tools/                                       # Core analytical tool modules
+    │       ├── parser_tool.py                           # Tree-sitter multi-language AST parser
+    │       ├── indexer_tool.py                          # MiniLM embeddings & FAISS indexer
+    │       ├── search_tool.py                           # Semantic search & token attribution
+    │       ├── explain_tool.py                          # Local SLM reasoning (Qwen2.5-1.5B)
+    │       ├── repo_loader.py                           # Dynamic GitHub & local loader
+    │       └── runner_tool.py                           # Subprocess execution tool
+    │
+    ├── ui/                                              # Web interface
+    │   └── app.py                                       # Streamlit Tokyo Night UI
+    │
+    ├── evaluation/                                      # Evaluation benchmark suite
+    │   ├── eval_queries.json                            # 10 test query definitions
+    │   └── run_eval.py                                  # Benchmark test script
+    │
+    ├── target_repo/                                     # Sample multi-language repository
+    │   ├── apiClient.js                                 # JavaScript sample
+    │   ├── auth_service.py                              # Python auth sample
+    │   ├── cache.go                                     # Go concurrency cache sample
+    │   ├── math_utils.py                                # Python calculation sample
+    │   └── run_tests.py                                 # Sample unit test runner
+    │
+    └── data/                                            # Runtime cache & stores (git-ignored)
+        ├── active_repo.txt                              # Active repository pointer
+        ├── chunks.json                                  # Extracted AST chunks
+        ├── faiss.index                                  # Serialized FAISS index
+        └── metadata.json                                # Indexing metadata
 ```
+
+---
+
+## Privacy & Security
+
+codeAtlas executes strictly on your local machine:
+- No telemetry or analytical tracking.
+- No outbound API calls for inference or embeddings.
+- Code repositories remain within the local filesystem.
