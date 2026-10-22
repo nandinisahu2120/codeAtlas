@@ -1,0 +1,89 @@
+# ========================================================
+# codeAtlas Git Ignore Configuration
+# ========================================================
+
+# --------------------------------------------------------
+# Python Bytecode & Caches
+# --------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# --------------------------------------------------------
+# Virtual Environments
+# --------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --------------------------------------------------------
+# Environment Variables & Secrets
+# --------------------------------------------------------
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# --------------------------------------------------------
+# Runtime Generated Data & Vector Stores
+# --------------------------------------------------------
+mini/data/repos/
+mini/data/*.index
+mini/data/chunks.json
+mini/data/active_repo.txt
+mini/data/metadata.json
+
+# --------------------------------------------------------
+# Testing & Code Quality Caches
+# --------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+
+# --------------------------------------------------------
+# Distribution & Packaging
+# --------------------------------------------------------
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+wheels/
+*.whl
+
+# --------------------------------------------------------
+# Operating System Artifacts
+# --------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# --------------------------------------------------------
+# IDEs & Text Editors
+# --------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~

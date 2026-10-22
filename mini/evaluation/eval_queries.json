@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "query": "where is user authentication handled",
+    "expected_file": "auth_service.py",
+    "expected_name": "authenticate"
+  },
+  {
+    "id": 2,
+    "query": "how are session tokens validated and expired",
+    "expected_file": "auth_service.py",
+    "expected_name": "validate_session"
+  },
+  {
+    "id": 3,
+    "query": "user registration and credential storage",
+    "expected_file": "auth_service.py",
+    "expected_name": "register_user"
+  },
+  {
+    "id": 4,
+    "query": "fibonacci number sequence generation",
+    "expected_file": "math_utils.py",
+    "expected_name": "compute_fibonacci"
+  },
+  {
+    "id": 5,
+    "query": "calculate arithmetic mean of numbers",
+    "expected_file": "math_utils.py",
+    "expected_name": "calculate_average"
+  },
+  {
+    "id": 6,
+    "query": "prime number factorization check",
+    "expected_file": "math_utils.py",
+    "expected_name": "is_prime"
+  },
+  {
+    "id": 7,
+    "query": "http rest api client fetch endpoint",
+    "expected_file": "apiClient.js",
+    "expected_name": "ApiClient"
+  },
+  {
+    "id": 8,
+    "query": "abort controller timeout network request",
+    "expected_file": "apiClient.js",
+    "expected_name": "fetchEndpoint"
+  },
+  {
+    "id": 9,
+    "query": "concurrent thread safe memory cache",
+    "expected_file": "cache.go",
+    "expected_name": "MemoryCache"
+  },
+  {
+    "id": 10,
+    "query": "cache expiration time ttl storage",
+    "expected_file": "cache.go",
+    "expected_name": "Set"
+  }
+]
