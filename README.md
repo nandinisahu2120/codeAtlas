@@ -57,8 +57,8 @@ flowchart TD
   Coordinates parsing, semantic retrieval, repository overview generation, bug analysis, and sandboxed test execution through a stateful `StateGraph` with conversation memory.
 - **Offline Codebase Reasoning**:
   Leverages a local, quantized `Qwen2.5-1.5B-Instruct` causal language model running in bfloat16 on CPU for natural language synthesis without external network requests.
-- **Model Context Protocol (MCP) Compliance**:
-  Provides a standard JSON-RPC 2.0 stdio server enabling IDEs and external agents (Claude Desktop, Antigravity, Cursor) to search and analyze repositories directly.
+- **Model Context Protocol (MCP) Server**:
+  Provides a standalone JSON-RPC 2.0 stdio interface exposing code search, indexing, and analysis tools programmatically.
 
 ---
 
@@ -155,20 +155,6 @@ python mcp_server.py
 | `explain_code_match` | `query`, `code` | Computes token-level attribution and natural language explanation |
 | `get_repo_overview` | *none* | Generates a manifest of indexed files, symbols, and language breakdown |
 | `run_python_file` | `file_path`, `timeout` | Executes a Python file in a sandboxed subprocess |
-
-### Claude Desktop Integration Configuration
-Add this entry to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "codeAtlas": {
-      "command": "/absolute/path/to/codeAtlas/mini/venv/bin/python",
-      "args": ["/absolute/path/to/codeAtlas/mini/mcp_server.py"]
-    }
-  }
-}
-```
 
 ---
 
