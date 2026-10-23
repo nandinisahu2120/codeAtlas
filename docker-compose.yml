@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  codeatlas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codeatlas-app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - OMP_NUM_THREADS=1
+      - KMP_DUPLICATE_LIB_OK=TRUE
+      - TOKENIZERS_PARALLELISM=false
+      - PYTHONIOENCODING=utf-8
+    volumes:
+      - ./mini/data:/app/mini/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G
