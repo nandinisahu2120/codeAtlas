@@ -35,7 +35,10 @@ def build_index(chunks: list[dict] | None = None) -> dict:
         chunks = json.loads(CHUNKS_FILE.read_text(encoding="utf-8"))
 
     if not chunks:
-        return {"status": "error", "message": "Zero chunks to index."}
+        return {
+            "status": "error",
+            "message": "Zero chunks to index. The repository appears to have no parseable source code files (.py, .js, .jsx, .ts, .tsx, .java, .go, .cpp, .html, etc.) or all files were empty.",
+        }
 
     model = _get_model()
 

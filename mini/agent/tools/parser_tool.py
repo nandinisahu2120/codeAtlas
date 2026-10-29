@@ -3,6 +3,7 @@ Universal Parser Tool
 Parses any code repository using Tree-sitter (40+ languages).
 Falls back to line-based chunking for unsupported file types.
 """
+import os
 import json
 from pathlib import Path
 from config import REPO_DIR, CHUNKS_FILE, DATA_DIR, CHUNK_MAX_LINES, get_repo_dir, set_repo_dir
@@ -17,16 +18,19 @@ SKIP_DIRS = {
 }
 SKIP_EXTS = {
     '.min.js', '.min.css', '.map', '.lock', '.png', '.jpg',
-    '.gif', '.svg', '.ico', '.pdf', '.zip', '.whl', '.pyc',
+    '.jpeg', '.gif', '.svg', '.ico', '.pdf', '.zip', '.whl',
+    '.pyc', '.exe', '.dll', '.so', '.dylib', '.tar', '.gz',
 }
 SUPPORTED_EXTS = {
-    '.py', '.js', '.mjs', '.cjs',
+    '.py', '.js', '.jsx', '.mjs', '.cjs',
     '.ts', '.tsx',
     '.java',
     '.go',
     '.rs',
     '.cpp', '.cc', '.cxx',
     '.c', '.h', '.hpp',
+    '.html', '.css', '.json', '.sql', '.md',
+    '.php', '.cs', '.kt', '.dart', '.swift',
 }
 
 # ---------------------------------------------------------------------------
@@ -51,32 +55,56 @@ def _build_lang_map() -> dict:
         except Exception:
             pass  # grammar not installed -- silently skip
 
-    _try(['.py'], lambda: __import__('tree_sitter_python').language(),
-         {'function_definition', 'async_function_definition', 'class_definition'})
+    _try(
+        ['.py'],
+        lambda: __import__('tree_sitter_python').language(),
+        {'function_definition', 'async_function_definition', 'class_definition'}
+    )
 
-    _try(['.js', '.mjs', '.cjs'], lambda: __import__('tree_sitter_javascript').language(),
-         {'function_declaration', 'class_declaration', 'method_definition',
-          'generator_function_declaration'})
+    _try(
+        ['.js', '.jsx', '.mjs', '.cjs'],
+        lambda: __import__('tree_sitter_javascript').language(),
+        {'function_declaration', 'class_declaration', 'method_definition',
+         'generator_function_declaration', 'variable_declarator'}
+    )
 
-    _try(['.ts', '.tsx'], lambda: __import__('tree_sitter_typescript').language_typescript(),
-         {'function_declaration', 'class_declaration', 'method_definition',
-          'interface_declaration', 'type_alias_declaration'})
+    _try(
+        ['.ts', '.tsx'],
+        lambda: __import__('tree_sitter_typescript').language_typescript(),
+        {'function_declaration', 'class_declaration', 'method_definition',
+         'interface_declaration', 'type_alias_declaration', 'variable_declarator'}
+    )
 
-    _try(['.java'], lambda: __import__('tree_sitter_java').language(),
-         {'method_declaration', 'class_declaration', 'interface_declaration',
-          'constructor_declaration'})
+    _try(
+        ['.java'],
+        lambda: __import__('tree_sitter_java').language(),
+        {'method_declaration', 'class_declaration', 'interface_declaration',
+         'constructor_declaration'}
+    )
 
-    _try(['.go'], lambda: __import__('tree_sitter_go').language(),
-         {'function_declaration', 'method_declaration', 'type_declaration'})
+    _try(
+        ['.go'],
+        lambda: __import__('tree_sitter_go').language(),
+        {'function_declaration', 'method_declaration', 'type_declaration'}
+    )
 
-    _try(['.rs'], lambda: __import__('tree_sitter_rust').language(),
-         {'function_item', 'struct_item', 'impl_item', 'trait_item', 'enum_item'})
+    _try(
+        ['.rs'],
+        lambda: __import__('tree_sitter_rust').language(),
+        {'function_item', 'struct_item', 'impl_item', 'trait_item', 'enum_item'}
+    )
 
-    _try(['.cpp', '.cc', '.cxx', '.hpp'], lambda: __import__('tree_sitter_cpp').language(),
-         {'function_definition', 'class_specifier', 'struct_specifier'})
+    _try(
+        ['.cpp', '.cc', '.cxx', '.hpp'],
+        lambda: __import__('tree_sitter_cpp').language(),
+        {'function_definition', 'class_specifier', 'struct_specifier'}
+    )
 
-    _try(['.c', '.h'], lambda: __import__('tree_sitter_c').language(),
-         {'function_definition', 'struct_specifier'})
+    _try(
+        ['.c', '.h'],
+        lambda: __import__('tree_sitter_c').language(),
+        {'function_definition', 'struct_specifier'}
+    )
 
     return reg
 
@@ -112,26 +140,34 @@ def _walk(node, def_types: set, source_bytes: bytes, rel_path: str,
           lang_label: str, chunks: list):
     if node.type in def_types:
         start_line = node.start_point[0] + 1
-        end_line   = node.end_point[0] + 1
+        end_line = node.end_point[0] + 1
         code = source_bytes[node.start_byte:node.end_byte].decode('utf-8', errors='ignore')
 
         if len(code.splitlines()) <= CHUNK_MAX_LINES:
             name = _get_name(node)
             chunks.append({
-                'id':         f'{rel_path}::{name}@{start_line}',
-                'file':       rel_path,
+                'id': f'{rel_path}::{name}@{start_line}',
+                'file': rel_path,
                 'start_line': start_line,
-                'end_line':   end_line,
-                'type':       node.type,
-                'name':       name,
-                'code':       code,
-                'docstring':  '',
-                'text':       f'{name}\n{code}',   # combined for better embedding
-                'language':   lang_label,
+                'end_line': end_line,
+                'type': node.type,
+                'name': name,
+                'code': code,
+                'docstring': '',
+                'text': f'{name}\n{code}',   # combined for better embedding
+                'language': lang_label,
             })
 
     for child in node.children:
         _walk(child, def_types, source_bytes, rel_path, lang_label, chunks)
+
+
+def _get_rel_path(file_path: Path, root: Path) -> str:
+    """Safe relative path computation resilient to Windows drive-letter casing and UNC paths."""
+    try:
+        return file_path.resolve().relative_to(root.resolve()).as_posix()
+    except Exception:
+        return os.path.relpath(str(file_path), str(root)).replace("\\", "/")
 
 
 def _parse_with_treesitter(file_path: Path, source: str, lang_config: dict, root: Path) -> list[dict]:
@@ -139,7 +175,7 @@ def _parse_with_treesitter(file_path: Path, source: str, lang_config: dict, root
     parser = Parser(lang_config['language'])
     source_bytes = source.encode('utf-8')
     tree = parser.parse(source_bytes)
-    rel_path  = file_path.relative_to(root).as_posix()
+    rel_path = _get_rel_path(file_path, root)
     lang_label = file_path.suffix.lstrip('.')
     chunks: list[dict] = []
     _walk(tree.root_node, lang_config['def_types'], source_bytes, rel_path, lang_label, chunks)
@@ -147,25 +183,25 @@ def _parse_with_treesitter(file_path: Path, source: str, lang_config: dict, root
 
 
 def _parse_fallback(file_path: Path, source: str, root: Path) -> list[dict]:
-    """Line-window chunking for file types with no grammar installed."""
-    rel_path = file_path.relative_to(root).as_posix()
-    lines    = source.splitlines()
-    chunks   = []
-    step     = 40
+    """Line-window chunking for file types with no grammar installed or when AST finds 0 symbols."""
+    rel_path = _get_rel_path(file_path, root)
+    lines = source.splitlines()
+    chunks = []
+    step = 40
     for i in range(0, len(lines), step):
         block = lines[i: i + step]
-        code  = '\n'.join(block)
+        code = '\n'.join(block)
         chunks.append({
-            'id':         f'{rel_path}::chunk@{i + 1}',
-            'file':       rel_path,
+            'id': f'{rel_path}::chunk@{i + 1}',
+            'file': rel_path,
             'start_line': i + 1,
-            'end_line':   i + len(block),
-            'type':       'chunk',
-            'name':       f'chunk_{i + 1}',
-            'code':       code,
-            'docstring':  '',
-            'text':       code,
-            'language':   file_path.suffix.lstrip('.') or 'unknown',
+            'end_line': i + len(block),
+            'type': 'chunk',
+            'name': f'chunk_{i + 1}',
+            'code': code,
+            'docstring': '',
+            'text': code,
+            'language': file_path.suffix.lstrip('.') or 'unknown',
         })
     return chunks
 
@@ -193,9 +229,9 @@ def parse_repo(repo_path: str | None = None) -> dict:
     if not root.exists():
         return {'status': 'error', 'message': f'Path not found: {root}'}
 
-    lmap          = _lang_map()
-    all_chunks    = []
-    files_parsed  = 0
+    lmap = _lang_map()
+    all_chunks = []
+    files_parsed = 0
     files_skipped = 0
 
     for f in sorted(root.rglob('*')):
@@ -221,6 +257,11 @@ def parse_repo(repo_path: str | None = None) -> dict:
             else:
                 chunks = _parse_fallback(f, source, root)
 
+            # Robust fallback: if AST parsing produced 0 chunks (e.g. arrow functions,
+            # top-level scripts, or blocks exceeding CHUNK_MAX_LINES), fall back to line chunking
+            if not chunks:
+                chunks = _parse_fallback(f, source, root)
+
             all_chunks.extend(chunks)
             files_parsed += 1
         except Exception:
@@ -230,13 +271,12 @@ def parse_repo(repo_path: str | None = None) -> dict:
     CHUNKS_FILE.write_text(json.dumps(all_chunks, indent=2), encoding="utf-8")
 
     return {
-        'status':              'ok',
-        'chunks':              len(all_chunks),
-        'files_parsed':        files_parsed,
-        'files_skipped':       files_skipped,
+        'status': 'ok',
+        'chunks': len(all_chunks),
+        'files_parsed': files_parsed,
+        'files_skipped': files_skipped,
         'languages_supported': list(lmap.keys()),
-        'message':             f'Parsed {len(all_chunks)} chunks from {files_parsed} files  '
-                               f'(skipped {files_skipped})',
+        'message': f'Parsed {len(all_chunks)} chunks from {files_parsed} files (skipped {files_skipped})',
     }
 
 

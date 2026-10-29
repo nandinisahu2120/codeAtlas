@@ -87,13 +87,22 @@ def index_node(state: AgentState) -> dict:
     if gh_match:
         target = gh_match.group(1).rstrip(".,;")
     else:
-        # Check if a custom path was given in the query (e.g. "index /path/to/repo" or "index ~/project")
-        parts = query.split()
-        for p in parts[1:]:
-            candidate = Path(p).expanduser().resolve()
+        # Check entire remaining string after command keyword (handles Windows paths with spaces)
+        remainder = re.sub(r"^(?:index|load|clone|parse)\s+", "", query.strip(), flags=re.I).strip().strip('"\'')
+        if remainder:
+            candidate = Path(remainder).expanduser().resolve()
             if candidate.exists() and candidate.is_dir():
                 target = str(candidate)
-                break
+
+        if not target:
+            # Check if a single token path was given
+            parts = query.split()
+            for p in parts[1:]:
+                p_clean = p.strip('"\'')
+                candidate = Path(p_clean).expanduser().resolve()
+                if candidate.exists() and candidate.is_dir():
+                    target = str(candidate)
+                    break
 
     repo_path = target if target else str(get_repo_dir())
 
