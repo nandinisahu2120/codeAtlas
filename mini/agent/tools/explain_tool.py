@@ -5,6 +5,8 @@ Fully offline, no API calls.
 """
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 import torch
+import platform
+import threading
 
 try:
     torch.set_num_threads(4)
@@ -14,36 +16,63 @@ except Exception:
 from config import LLM_MODEL, MAX_NEW_TOKENS
 
 _pipe = None
+_pipe_lock = threading.Lock()
+_loading_status = "unloaded"
 
 
 def _get_pipe():
-    """Lazy-load the local LLM pipeline. First call downloads ~1.5 GB."""
-    global _pipe
-    if _pipe is None:
-        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
-        model = AutoModelForCausalLM.from_pretrained(
-            LLM_MODEL,
-            dtype=torch.bfloat16,
-            device_map="cpu",
-        )
+    """Lazy-load the local LLM pipeline with thread safety and OS-specific optimizations."""
+    global _pipe, _loading_status
+    if _pipe is not None:
+        return _pipe
 
-        pad_id = tokenizer.eos_token_id
-        _pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=True,
-            temperature=0.2,
-            top_p=0.9,
-            pad_token_id=pad_id,
-        )
+    with _pipe_lock:
+        if _pipe is not None:
+            return _pipe
+
+        _loading_status = "loading"
+        print(f"[codeAtlas] Initializing local LLM: {LLM_MODEL} ...")
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
+            # Windows x86 CPU does not natively accelerate bfloat16; use float32 to avoid severe slowdowns/hangs
+            is_win = platform.system() == "Windows"
+            model_dtype = torch.float32 if is_win else torch.bfloat16
+
+            model = AutoModelForCausalLM.from_pretrained(
+                LLM_MODEL,
+                dtype=model_dtype,
+                device_map="cpu",
+                low_cpu_mem_usage=True,
+            )
+
+            pad_id = tokenizer.eos_token_id
+            _pipe = pipeline(
+                "text-generation",
+                model=model,
+                tokenizer=tokenizer,
+                max_new_tokens=MAX_NEW_TOKENS,
+                do_sample=True,
+                temperature=0.2,
+                top_p=0.9,
+                pad_token_id=pad_id,
+            )
+            _loading_status = "ready"
+            print("[codeAtlas] Local LLM loaded successfully.")
+        except Exception as e:
+            _loading_status = f"error: {e}"
+            print(f"[codeAtlas] Warning: Failed to load local LLM: {e}")
+            raise e
+
     return _pipe
 
 
 def preload_model():
     """Warm up the pipeline so queries do not suffer model load latency."""
-    return _get_pipe()
+    try:
+        return _get_pipe()
+    except Exception as e:
+        print(f"[codeAtlas] Preload warning: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -89,13 +118,20 @@ def _build_prompt(system: str, query: str, code: str = "", file_info: str = "") 
 
 
 def _generate(prompt: str) -> str:
-    pipe = _get_pipe()
-    out  = pipe(prompt, return_full_text=False)
-    text = out[0]["generated_text"].strip()
-    # Clean trailing special tokens
-    for tok in ["<|im_end|>", "<|endoftext|>"]:
-        text = text.replace(tok, "").strip()
-    return text
+    try:
+        pipe = _get_pipe()
+        out  = pipe(prompt, return_full_text=False)
+        text = out[0]["generated_text"].strip()
+        # Clean trailing special tokens
+        for tok in ["<|im_end|>", "<|endoftext|>"]:
+            text = text.replace(tok, "").strip()
+        return text
+    except Exception as e:
+        return (
+            f"The local AI model (Qwen2.5-1.5B) is currently downloading or initializing in the terminal.\n\n"
+            f"**Status detail:** `{e}`\n\n"
+            f"*Check the Command Prompt/Terminal window running codeAtlas to see the progress.*"
+        )
 
 
 # ---------------------------------------------------------------------------
