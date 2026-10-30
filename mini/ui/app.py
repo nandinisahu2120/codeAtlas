@@ -255,6 +255,9 @@ with st.sidebar:
     - Or type in chat: `load https://github.com/psf/requests`
     - Search: "where is authentication handled?"
     - Explain: "explain calculate_average"
+    - Impact: "which functions break if I change calculate_average?"
+    - Callers: "who calls authenticate?"
+    - Topology: "show codebase call graph"
     - Bugs: "find bugs in the codebase"
     - Improve: "how can I improve this code?"
     - Run: "run run_tests.py"

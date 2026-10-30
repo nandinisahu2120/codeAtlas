@@ -33,6 +33,7 @@ def set_repo_dir(new_path: str | Path) -> Path:
 CHUNKS_FILE = DATA_DIR / "chunks.json"
 INDEX_FILE  = DATA_DIR / "faiss.index"
 META_FILE   = DATA_DIR / "metadata.json"
+CALL_GRAPH_FILE = DATA_DIR / "call_graph.json"
 
 # Embedding model — 90 MB, downloaded once, runs offline
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"

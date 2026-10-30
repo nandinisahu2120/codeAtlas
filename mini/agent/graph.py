@@ -46,11 +46,24 @@ GREETING_PATTERNS = re.compile(
     r"^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening)|who\s+are\s+you|how\s+are\s+you)\b", re.I
 )
 
+IMPACT_PATTERNS = re.compile(
+    r"\b("
+    r"impact|blast radius|"
+    r"who calls|what calls|who invokes|who uses|"
+    r"what does .* call|callees?|callers?|"
+    r"which functions? break|break if i change|change (this|the) signature|"
+    r"call graph|dependency graph|topology|dependencies of|depend on"
+    r")\b",
+    re.I,
+)
+
 
 def _detect_intent(query: str) -> str:
     cleaned = query.strip()
     if GREETING_PATTERNS.search(cleaned):
         return "chat"
+    if IMPACT_PATTERNS.search(cleaned):
+        return "graph"
     if OVERVIEW_PATTERNS.search(cleaned):
         return "overview"
     if INDEX_PATTERNS.search(cleaned):
@@ -323,6 +336,94 @@ def chat_node(state: AgentState) -> dict:
     return {"final_response": response}
 
 
+def graph_analysis_node(state: AgentState) -> dict:
+    """Analyze AST call graph, caller-callee relationships, and impact blast-radius."""
+    from agent.tools.graph_tool import analyze_impact, get_topology_summary
+    query = state.get("query", "")
+
+    # Extract target symbol from natural language query
+    patterns = [
+        r"(?:break\s+if\s+(?:i|we)\s+(?:change|modify))\s+[`'\"]?([a-zA-Z_][a-zA-Z0-9_]*)[`'\"]?",
+        r"(?:change|modify|update|refactor)\s+(?:the\s+)?(?:signature\s+of\s+)?(?:function\s+|method\s+)?[`'\"]?([a-zA-Z_][a-zA-Z0-9_]*)[`'\"]?",
+        r"(?:who calls|what calls|who invokes|who uses)\s+[`'\"]?([a-zA-Z_][a-zA-Z0-9_]*)[`'\"]?",
+        r"(?:callers of|callees of|impact of)\s+[`'\"]?([a-zA-Z_][a-zA-Z0-9_]*)[`'\"]?",
+        r"[`'\"]([a-zA-Z_][a-zA-Z0-9_]*)[`'\"]",
+    ]
+    target_symbol = None
+    stopwords = {"if", "i", "we", "this", "the", "a", "an", "function", "functions", "signature", "method", "it", "my", "code"}
+    for p in patterns:
+        m = re.search(p, query, re.I)
+        if m:
+            candidate = m.group(1).strip()
+            if candidate.lower() not in stopwords:
+                target_symbol = candidate
+                break
+
+    # If general topology query (e.g. "show call graph", "codebase topology")
+    if not target_symbol or target_symbol.lower() in ("graph", "topology", "callgraph", "summary"):
+        summary = get_topology_summary()
+        res = [
+            "### Codebase AST Call Graph & Dependency Topology\n",
+            f"- **Indexed Symbols (Functions/Classes):** {summary['total_symbols']}",
+            f"- **Indexed Source Files:** {summary['total_files']}",
+            f"- **Detected Call Edges (Caller -> Callee):** {summary['total_calls']}",
+            f"- **File Import Dependencies:** {summary['total_import_edges']}\n",
+        ]
+        if summary.get("top_called_symbols"):
+            res.append("**Most Central / Frequently Called Functions:**")
+            for item in summary["top_called_symbols"]:
+                res.append(f"- `{item['name']}` ({item['file']}) — invoked by **{item['callers']}** callers")
+        res.append("\n*Tip: Ask 'Which functions break if I change <function_name>?' for impact analysis.*")
+        return {"final_response": "\n".join(res)}
+
+    # Perform impact analysis for target_symbol
+    impact = analyze_impact(target_symbol)
+    if impact.get("status") == "not_found":
+        return {
+            "final_response": (
+                f"### Impact Analysis: `{target_symbol}`\n\n"
+                f"Symbol `{target_symbol}` was not directly found in the indexed AST definition table.\n"
+                f"Ensure the repository is indexed and check spelling of the function or method name."
+            )
+        }
+
+    res = [
+        f"### Impact & Blast Radius Analysis: `{impact['symbol']}`\n",
+        f"- **Definition Location:** `{impact['file']}` (lines {impact['lines']})",
+        f"- **Architectural Risk Level:** **{impact['risk_level']}**",
+        f"- **Direct Callers:** {impact['direct_caller_count']}",
+        f"- **Transitive Callers (Blast Radius):** {impact['transitive_caller_count']}\n",
+    ]
+
+    if impact["direct_callers"]:
+        res.append("**Direct Callers (Will break if signature changes):**")
+        for c in impact["direct_callers"]:
+            res.append(f"- `{c['name']}` in `{c['file']}` (line {c['line']})")
+        res.append("")
+
+    if impact["transitive_callers"]:
+        res.append("**Transitive Dependency Chain (Secondary impact):**")
+        for c in impact["transitive_callers"]:
+            res.append(f"- `{c['name']}` in `{c['file']}` (line {c['line']})")
+        res.append("")
+
+    if impact["dependent_files"]:
+        res.append("**Files Importing This Module:**")
+        for f in impact["dependent_files"]:
+            res.append(f"- `{f}`")
+        res.append("")
+
+    if not impact["direct_callers"] and not impact["transitive_callers"]:
+        res.append("*No internal callers detected. This appears to be an entry point, public API endpoint, or top-level handler.*")
+    else:
+        res.append("**Refactoring Precautions:**")
+        res.append("1. Maintain backward-compatibility or provide default parameter values.")
+        res.append("2. Update call sites in the direct caller functions listed above.")
+        res.append("3. Execute integration/unit tests covering the transitive dependency chain before committing.")
+
+    return {"final_response": "\n".join(res)}
+
+
 # ---------------------------------------------------------------------------
 # Routing logic
 # ---------------------------------------------------------------------------
@@ -331,6 +432,8 @@ def route_after_router(state: AgentState) -> str:
     intent = state.get("intent", "chat")
     if intent == "index":
         return "index_node"
+    if intent == "graph":
+        return "graph_node"
     if intent == "overview":
         return "overview_node"
     if intent in ("search",):
@@ -364,6 +467,7 @@ def build_graph():
     g.add_node("bug_node",      bug_node)
     g.add_node("improve_node",  improve_node)
     g.add_node("run_node",      run_node)
+    g.add_node("graph_node",    graph_analysis_node)
     g.add_node("chat_node",     chat_node)
 
     # For bug/improve/run: search first, then specialized node
@@ -382,11 +486,15 @@ def build_graph():
         "search_then_bug":     "search_then_bug",
         "search_then_improve": "search_then_improve",
         "search_then_run":     "search_then_run",
+        "graph_node":          "graph_node",
         "chat_node":           "chat_node",
     })
 
     # overview -> END
     g.add_edge("overview_node", END)
+
+    # graph -> END
+    g.add_edge("graph_node", END)
 
     # search -> explain -> END
     g.add_edge("search_node", "explain_node")
