@@ -37,6 +37,7 @@ venv.bak/
 mini/data/repos/
 mini/data/*.index
 mini/data/chunks.json
+mini/data/call_graph.json
 mini/data/active_repo.txt
 mini/data/metadata.json
 

@@ -71,6 +71,13 @@ def build_index(chunks: list[dict] | None = None) -> dict:
         })
     META_FILE.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
+    # Build Call Graph & Dependency Topology
+    try:
+        from agent.tools.graph_tool import build_dependency_graph
+        build_dependency_graph(chunks)
+    except Exception as e:
+        print(f"[codeAtlas] Warning: Dependency graph build skipped: {e}")
+
     return {
         "status":    "ok",
         "indexed":   len(chunks),

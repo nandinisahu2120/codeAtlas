@@ -7,6 +7,7 @@ streamlit>=1.35.0
 langgraph>=0.2.0
 langchain-core>=0.2.0
 numpy>=1.26.0
+networkx>=3.0.0
 
 # Universal code parsing (Tree-sitter + language grammars)
 tree-sitter>=0.22.0
