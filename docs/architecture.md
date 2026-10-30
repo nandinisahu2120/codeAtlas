@@ -52,3 +52,4 @@ codeAtlas is designed to solve the data sovereignty and intellectual property ri
 - **macOS (Apple Silicon):** Native bfloat16 vector acceleration.
 - **Windows (x86 CPU):** Automatically utilizes float32 to prevent OpenMP bfloat16 software emulation bottlenecks.
 - **Linux:** Fully supported with standard POSIX process management.
+
