@@ -1,6 +1,6 @@
 # codeAtlas: Agentic Semantic Code Search & Codebase Intelligence
 
-**codeAtlas** is a cross-platform, private, and explainable AI engine for semantic code retrieval, multi-language repository understanding, token-level attribution, automated bug inspection, and agentic orchestration. 
+**codeAtlas** is a cross-platform, private, and explainable AI engine for semantic code retrieval, multi-language repository understanding, AST call-graph topology, token-level attribution, automated bug inspection, and agentic orchestration. 
 
 Built to execute 100% locally and offline without external API keys or cloud dependencies across macOS, Linux, and Windows.
 
@@ -16,22 +16,27 @@ flowchart TD
         TS --> Chunks[Syntax-Aware Code Chunks]
     end
 
-    subgraph Indexing ["2. Vector Representation & Indexing"]
+    subgraph Indexing ["2. Vector & Topology Stores"]
         Chunks --> Embedder[all-MiniLM-L6-v2 Embedder]
         Embedder --> Vectors[384-d Dense Vectors]
         Vectors --> FAISS[FAISS IndexFlatIP Vector Store]
+        
+        Chunks --> GraphEngine[NetworkX Call Graph Engine]
+        GraphEngine --> DiGraph[AST Dependency & Call Topology]
     end
 
     subgraph AgenticCore ["3. LangGraph Orchestrator & Reasoning"]
         Query[User Natural Language Query] --> Router[Intent Router]
         Router --> SearchNode[Vector Search Node]
         Router --> OverviewNode[Repository Overview Node]
+        Router --> GraphNode[Impact & Call Graph Node]
         Router --> BugNode[Bug Analysis Node]
         Router --> RunNode[Subprocess Runner Node]
         
         SearchNode --> XAI[SHAP-Style Token Attribution]
         XAI --> ContextBuilder[Context Synthesizer]
         OverviewNode --> ContextBuilder
+        GraphNode --> ContextBuilder
         BugNode --> ContextBuilder
 
         ContextBuilder --> SLM[Local Qwen2.5-1.5B Reasoning]
@@ -48,17 +53,19 @@ flowchart TD
 ## Key Features
 
 - **Universal Multi-Language AST Parsing**:
-  Extracts function- and class-level semantic blocks using Tree-sitter across 9 primary languages (Java, Python, JavaScript, TypeScript, Go, Rust, C, C++, and SQL), with robust line-window fallback for other file formats.
+  Extracts function- and class-level semantic blocks using Tree-sitter across 9 primary languages (Java, Python, JavaScript, TypeScript, Go, Rust, C, C++, and SQL), with robust line-window fallback for other file formats and modern React/JSX component handling.
 - **Dense Vector Search**:
   Embeds syntax-aware code blocks into a 384-dimensional dense semantic space via `all-MiniLM-L6-v2` and indexes them in an inner-product normalized FAISS vector database.
+- **Call Graph & AST Dependency Topology**:
+  Extracts caller-callee call graphs and module import structures using NetworkX. Performs multi-hop transitive blast-radius impact analysis (*"Which functions break if I change this signature?"*) and architectural risk scoring (`LOW`, `MEDIUM`, `HIGH`).
 - **Explainable AI (Token-Level Attribution)**:
   Applies vectorized token similarity scoring to calculate individual token contributions (SHAP-style explainability), illustrating why specific code snippets matched a query.
 - **Agentic Orchestration (LangGraph)**:
-  Coordinates parsing, semantic retrieval, repository overview generation, bug analysis, and sandboxed test execution through a stateful `StateGraph` with conversation memory.
+  Coordinates parsing, semantic retrieval, topology queries, repository overviews, bug analysis, and sandboxed test execution through a stateful `StateGraph` with conversation checkpointing.
 - **Offline Codebase Reasoning**:
-  Leverages a local, quantized `Qwen2.5-1.5B-Instruct` causal language model running in bfloat16 on CPU for natural language synthesis without external network requests.
+  Leverages a local, quantized `Qwen2.5-1.5B-Instruct` causal language model with platform-aware CPU precision (`float32` on Windows x86, `bfloat16` on macOS ARM) and thread-safe synchronization without external network requests.
 - **Model Context Protocol (MCP) Server**:
-  Provides a standalone JSON-RPC 2.0 stdio interface exposing code search, indexing, and analysis tools programmatically.
+  Provides a standalone JSON-RPC 2.0 stdio interface exposing code search, indexing, and analysis tools programmatically for IDEs and autonomous agents.
 
 ---
 
@@ -111,7 +118,7 @@ http://localhost:8501
 ## Usage Guide
 
 ### 1. Indexing a Codebase
-In the Streamlit chat input or agent prompt:
+In the Streamlit chat input or repository connection card:
 - **Load a remote GitHub repository**:
   ```text
   load https://github.com/username/project.git
@@ -132,9 +139,19 @@ Query code by functionality, concept, or technical behavior rather than exact ke
 - `"language used in this repo?"`
 - `"repo overview"`
 
-### 3. Bug Analysis & Verification
+### 3. Call Graph & Impact Analysis
+Analyze architectural relationships and refactoring blast-radius:
+- `"which functions break if I change calculate_average?"`
+- `"who calls analyze_scores?"`
+- `"show codebase call graph summary"`
+
+### 4. Bug Analysis & Code Quality
 - `"check math_utils.py for division by zero errors"`
 - `"find bugs in the caching logic"`
+- `"how can I improve this code?"`
+
+### 5. Sandboxed Execution
+- `"run run_tests.py"`
 
 ---
 
@@ -177,12 +194,24 @@ python evaluation/run_eval.py
 
 ---
 
+## Running Unit & Topology Tests
+
+To run the complete test suite for AST parsing, NetworkX call graphs, and LangGraph intent routing:
+
+```bash
+cd mini
+python test_graph_tool.py
+```
+
+---
+
 ## Project Structure
 
 ```text
 codeAtlas/
 ├── .gitignore                                           # Git ignore configuration
 ├── README.md                                            # Technical documentation
+├── PROJECT_ANALYSIS_AND_IMPACT.md                       # Comprehensive feature matrix and analysis
 └── mini/                                                # Application root
     ├── run.py                                           # Universal launcher
     ├── start.sh                                         # macOS/Linux launcher
@@ -190,6 +219,7 @@ codeAtlas/
     ├── config.py                                        # Global paths and configuration
     ├── mcp_server.py                                    # Model Context Protocol stdio server
     ├── requirements.txt                                 # Core dependencies
+    ├── test_graph_tool.py                               # Graph and routing unit tests
     │
     ├── agent/                                           # LangGraph agent engine
     │   ├── graph.py                                     # StateGraph coordinator & router
@@ -197,6 +227,7 @@ codeAtlas/
     │   └── tools/                                       # Core analytical tool modules
     │       ├── parser_tool.py                           # Tree-sitter multi-language AST parser
     │       ├── indexer_tool.py                          # MiniLM embeddings & FAISS indexer
+    │       ├── graph_tool.py                            # NetworkX call graph & impact topology
     │       ├── search_tool.py                           # Semantic search & token attribution
     │       ├── explain_tool.py                          # Local SLM reasoning (Qwen2.5-1.5B)
     │       ├── repo_loader.py                           # Dynamic GitHub & local loader
@@ -220,8 +251,18 @@ codeAtlas/
         ├── active_repo.txt                              # Active repository pointer
         ├── chunks.json                                  # Extracted AST chunks
         ├── faiss.index                                  # Serialized FAISS index
+        ├── call_graph.json                              # Serialized NetworkX dependency graph
         └── metadata.json                                # Indexing metadata
 ```
+
+---
+
+## Contributors
+
+- **Nandini Sahu** (Team Leader)
+- **Yashwardhan Singh**
+- **Kanika Jain**
+- **Durgesh Chouhan**
 
 ---
 
@@ -230,4 +271,4 @@ codeAtlas/
 codeAtlas executes strictly on your local machine:
 - No telemetry or analytical tracking.
 - No outbound API calls for inference or embeddings.
-- Code repositories remain within the local filesystem.
+- Code repositories remain strictly within the local filesystem.
