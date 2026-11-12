@@ -68,8 +68,16 @@ def _detect_intent(query: str) -> str:
         return "overview"
     if INDEX_PATTERNS.search(cleaned):
         return "index"
-    if RUN_PATTERNS.search(cleaned):
+    # Route to run only for explicit execution requests (mentions a .py file or starts with run/execute),
+    # so questions like "where are commands executed?" still go to semantic search.
+    if RUN_PATTERNS.search(cleaned) and (
+        re.search(r"\.py\b", cleaned, re.I)
+        or re.match(r"^(run|execute|exec)\b", cleaned, re.I)
+    ):
         return "run"
+    # Check improve before bug so phrases like "improve error handling" route to improve, not bug review.
+    if IMPROVE_PATTERNS.search(cleaned) and not re.search(r"\b(bugs?|crash(?:es)?|vulnerab\w*)\b", cleaned, re.I):
+        return "improve"
     if BUG_PATTERNS.search(cleaned):
         return "bug"
     if IMPROVE_PATTERNS.search(cleaned):
